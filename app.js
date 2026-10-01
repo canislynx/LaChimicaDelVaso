@@ -191,13 +191,17 @@
     return v ? (v.dil||1) : 1;
   }
   function setGroupDil(members, newDil){
+    // il titolante del gruppo è un unico numero conservato (vedi groupDisplayTau) che
+    // però, per come viene scritto, finisce quasi sempre fisicamente su members[0] —
+    // che nei gruppi "di base" è proprio il vaso Acqua. Va riscalato lì comunque: è
+    // la quantità di titolante dell'INTERO gruppo, non della sola chimica del vaso
+    // non-acqua, quindi qui NON si salta l'acqua come invece fa il resto (v.dil).
+    const oldDil = groupDil(members);
+    const ratio = oldDil/newDil; // f_new/f_old
     members.forEach(v=>{
-      if(v.water) return;
-      const oldDil = v.dil||1;
-      const ratio = oldDil/newDil; // f_new/f_old
       v.tauExtra = (v.tauExtra||0) * ratio;
       v.tauBase = (v.tauBase||0) * ratio;
-      v.dil = newDil;
+      if(!v.water) v.dil = newDil;
     });
   }
   // estremo (mol/L, simmetrico) dello slider di UN gruppo: quanto titolante serve
