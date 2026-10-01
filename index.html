@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>La Chimica del Vaso</title>
+<meta name="description" content="Simulatore interattivo dei vasi comunicanti applicato alla capacità tampone acido-base e al potenziale chimico, per lo studio della chimica al liceo.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="wrap">
+
+  <header class="top">
+    <div>
+      <span class="kicker">Chimica acido&ndash;base &middot; capacità tampone &amp; potenziale chimico</span>
+      <h1>La Chimica del Vaso</h1>
+      <p>Vasi comunicanti la cui forma è la curva di capacità tampone: più il vaso è largo, meno il livello si muove quando si versa acido o base.</p>
+    </div>
+    <div class="top-actions">
+      <button class="pill-btn primary" id="instrBtn" type="button">📖 Istruzioni per l'uso</button>
+      <button class="pill-btn" id="themeToggle" type="button">Tema: sistema</button>
+    </div>
+  </header>
+
+  <section>
+    <h2 class="section-title"><span class="num">01</span> Il banco di lavoro</h2>
+    <p class="section-sub">Ogni vaso rappresenta una coppia acido/base coniugata. Collegateli con le valvole sul tubo in basso: se sono uniti condividono lo stesso livello, cioè lo stesso pH, come dei veri vasi comunicanti.</p>
+
+    <div class="mode-tabs" id="modeTabs">
+      <button class="mode-tab" data-mode="libero" type="button">Modello libero</button>
+      <button class="mode-tab" data-mode="prep" type="button">Preparazione tampone</button>
+      <button class="mode-tab" data-mode="titolazione" type="button">Titolazione</button>
+      <button class="mode-tab" data-mode="specie" type="button">Specie predominanti</button>
+    </div>
+
+    <div class="panel">
+      <div class="bench-row" id="benchRow">
+        <div class="rig">
+          <svg id="rigSvg" viewBox="0 0 980 610" role="img" aria-label="Vasi tampone collegati su un banco di laboratorio, asse del pH orientato dall'alto (0) verso il basso (14)"></svg>
+        </div>
+        <div class="mode-panel" id="titrPanel" hidden>
+          <svg id="titrSvg" class="titration-svg" viewBox="0 0 980 610" role="img" aria-label="Curva di titolazione: pH in funzione del titolante aggiunto, trascinabile"></svg>
+          <div class="legend" id="titrLegend"></div>
+        </div>
+        <div id="sideControls">
+          <div class="side-card">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <p class="ctrl-title" style="margin:0;">Titolante aggiunto</p>
+              <select id="stepSelect" style="max-width:9.5em;"></select>
+            </div>
+            <div id="titrantGroups"></div>
+          </div>
+
+          <div class="side-card" id="vesselCard">
+            <div style="display:flex; align-items:center; justify-content:space-between; gap:8px;">
+              <p class="ctrl-title" style="margin:0;">Vasi sul banco</p>
+              <button class="reset-btn" id="resetBtn" type="button" title="Rimuove tutti i vasi tranne l'acqua pura">↺ Reset</button>
+            </div>
+            <p class="hint" style="margin:0 0 2px;">Trascinate dalla maniglia ⠿ per impilare o affiancare.</p>
+            <div class="vessel-list" id="vesselList"></div>
+            <div class="add-vessel">
+              <select id="presetSelect"></select>
+              <button id="addBtn" type="button">+ Aggiungi</button>
+            </div>
+          </div>
+
+          <div class="side-card" id="prepSideCard" hidden>
+            <p class="ctrl-title" style="margin:0;">Preparare una soluzione tampone</p>
+            <p class="hint" style="margin:0 0 2px;">Scegliete il sistema e il metodo, poi osservate a che pH arriva la soluzione.</p>
+            <div class="field">
+              <label for="prepSystem">Sistema tampone</label>
+              <select id="prepSystem"></select>
+            </div>
+            <div class="field">
+              <label>Metodo di preparazione</label>
+              <div class="radio-group">
+                <label class="radio-opt"><input type="radio" name="prepMethod" value="mix" checked><span><b>Metà e metà</b> — acido e base coniugata in eguale quantità (pH = pK<sub>a</sub>)</span></label>
+                <label class="radio-opt"><input type="radio" name="prepMethod" value="fromAcid"><span><b>Dall'acido</b> — partite dalla sola forma acida e aggiungete base forte</span></label>
+                <label class="radio-opt"><input type="radio" name="prepMethod" value="fromBase"><span><b>Dalla base</b> — partite dalla sola forma basica e aggiungete acido forte</span></label>
+              </div>
+            </div>
+            <button class="go-btn" id="prepGoBtn" type="button">Prepara la soluzione</button>
+          </div>
+        </div>
+      </div>
+      <div class="readout-row" id="statRow"></div>
+    </div>
+  </section>
+
+  <section>
+    <h2 class="section-title"><span class="num">02</span> Curve di capacità tampone &beta;(pH)</h2>
+    <p class="section-sub">La larghezza di ciascun vaso a una data altezza è &beta;, la capacità tampone in quel punto. Il punto pieno segna il pH attuale del gruppo a cui appartiene il vaso.</p>
+    <div class="panel chart-panel">
+      <svg id="chartSvg" viewBox="0 0 900 260" role="img" aria-label="Grafico della capacità tampone in funzione del pH per ogni vaso"></svg>
+      <div class="legend" id="chartLegend"></div>
+    </div>
+  </section>
+
+  <footer>La Chimica del Vaso &middot; modello di capacità tampone di Van Slyke, esteso al contributo dell'autoionizzazione dell'acqua e al potenziale chimico del protone &middot; costruito per l'uso in classe.</footer>
+</div>
+
+<dialog id="instrDialog">
+  <div class="instr-inner">
+    <div class="instr-head">
+      <h2>Come funziona</h2>
+      <button class="instr-close" id="instrClose" type="button" aria-label="Chiudi">&times;</button>
+    </div>
+
+    <h3>Come si usa</h3>
+    <ul class="instr-list">
+      <li><b>Quattro modalità</b> in alto: <b>Modello libero</b> per costruire qualsiasi combinazione di vasi; <b>Preparazione tampone</b> per simulare come si prepara in laboratorio un tampone; <b>Titolazione</b> per la curva completa di pH; <b>Specie predominanti</b> per vedere le formule delle specie in gioco accanto a ogni vaso. Il banco al centro è sempre lo stesso: cambia solo cosa gli sta intorno.</li>
+      <li><b>Aggiungere un vaso</b>: si sceglie un preset — raggruppati per famiglia: tamponi semplici, fosfato, carbonato, amminoacidi, indicatori, acidi/basi forti — nel riquadro "Vasi sul banco" e si preme "+ Aggiungi".</li>
+      <li><b>Gestire una scheda</b>: si rinomina, si cancella con &times;, e la concentrazione si regola con lo slider "Conc." (0.1&ndash;10 M).</li>
+      <li><b>Valvole e colonne</b>: le valvole sul tubo in basso aprono/chiudono il collegamento fra vasi adiacenti (stesso pH se collegati). Trascinando la maniglia ⠿ di una scheda su un'altra, il vaso si sposta lì accanto e il confine diventa anche "impilato" (stessa colonna, come nei sistemi poliprotici) — cliccabile per separarle di nuovo restando comunque collegate da una valvola.</li>
+    </ul>
+    <div class="instr-fig" id="figBench">
+      <p class="instr-fig-cap">Due vasi collegati: la valvola aperta sul tubo, i nomi sotto ciascuna colonna.</p>
+    </div>
+
+    <ul class="instr-list">
+      <li><b>Titolante</b>: un cursore per ciascun gruppo di vasi collegati — se separati (valvola chiusa) si titolano indipendentemente, se uniti condividono lo stesso. Si regola con lo slider, il campo numerico, o i pulsanti +/&minus; con il passo scelto dal menu — positivo aggiunge base forte (OH⁻), negativo acido forte (H⁺). L'estremo di ciascuna barra si adatta da solo perché il proprio gruppo possa sempre raggiungere i due estremi di pH. Unendo due gruppi già titolati separatamente, il risultato è la loro somma reale (non si riparte da zero).</li>
+      <li><b>Preparazione tampone</b>: si sceglie il sistema e il metodo nel riquadro laterale (al posto di "Vasi sul banco"). Con "dall'acido"/"dalla base" si parte dalla forma pressoché pura, e la barra del titolante riparte da 0 esattamente lì.</li>
+      <li><b>Titolazione</b>: i vasi e la curva restano visibili insieme, affiancati, senza dover scorrere. Si trascina direttamente sul grafico, oppure si usa lo slider qui sopra.</li>
+    </ul>
+    <div class="instr-fig" id="figTitr">
+      <p class="instr-fig-cap">Titolazione: vasi e curva insieme; si trascina direttamente sul grafico.</p>
+    </div>
+
+    <ul class="instr-list">
+      <li><b>Specie predominanti</b>: per ogni vaso tampone, la specie scritta più in alto predomina a pH più basso (forma acida), quella più in basso a pH più alto (base coniugata), separate dal pK<sub>a</sub>.</li>
+    </ul>
+    <div class="instr-fig" id="figSpecie">
+      <p class="instr-fig-cap">Specie predominanti: forma acida in alto, base coniugata in basso, separate dal pK<sub>a</sub>.</p>
+    </div>
+
+    <ul class="instr-list">
+      <li><b>HCl e NaOH</b>: sono vasi normalissimi, impilabili e collegabili come qualunque altro. HCl usa la stima approssimata, ma comunque la più citata, di sette unità di pH sotto lo zero: un pK<sub>a</sub> fuori dalla finestra fra pH 0 e pH 14, per cui quando è sul banco la scala guadagna spazio sotto per mostrarne il rigonfiamento, e nell'intervallo visibile resta sempre dissociato, come ci si aspetta da un acido forte. NaOH invece ha pK<sub>a</sub> 14: non è una stima o una scelta illustrativa, è il vero equilibrio fra acqua e il suo OH⁻, la base coniugata dell'acqua stessa. Proprio perché 14 è già dentro la finestra invece di starne fuori come il sette di HCl, il vaso mostra fedelmente anche la parte debole di quell'equilibrio: a pH lontani da 14 l'NaOH aggiunto risulta poco dissociato, un comportamento diverso da quello di una base forte da manuale, che qui si è scelto di non correggere artificialmente.</li>
+      <li><b>Altri comandi</b>: "↺ Reset" rimuove tutto tranne l'acqua pura; "Tema" alterna chiaro/scuro/sistema.</li>
+    </ul>
+  </div>
+</dialog>
+
+<script src="app.js"></script>
+</body>
+</html>
