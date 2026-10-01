@@ -414,7 +414,7 @@
     cursor:pointer; font-size:.92rem; line-height:1; padding:2px 4px;
   }
   .vcard .vdel:hover{ color:var(--warn); }
-  .row-slider{ display:grid; grid-template-columns: 3.8em 1fr 3.4em; align-items:center; gap:6px; font-size:.72rem; color:var(--ink-soft); margin-bottom:4px; }
+  .row-slider{ display:grid; grid-template-columns: 5.4em 1fr 4.6em; align-items:center; gap:6px; font-size:.72rem; color:var(--ink-soft); margin-bottom:4px; }
   .row-slider:last-child{ margin-bottom:0; }
   .row-slider output{ font-family:"IBM Plex Mono", monospace; text-align:right; color:var(--ink); }
   .pka-readout{ font-size:.72rem; color:var(--ink-soft); margin-bottom:6px; }

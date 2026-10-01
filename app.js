@@ -32,19 +32,27 @@
   // proprio al bordo della finestra: non essendo spostato fuori scala come HCl, nel suo
   // caso la formula mostra fedelmente anche la parte debole dell'equilibrio (poco
   // dissociato a pH bassi), non un comportamento da base forte su tutto 0-14.
+  // diluire un vaso (v.dil, fattore ≥ 1: quante volte il suo volume originale è
+  // stato annacquato) non si limita a restringere la sua C: la soluzione diventa
+  // sempre più simile ad acqua pura, finché a diluizione "infinita" il suo pH deve
+  // tendere a 7. f è la frazione di soluzione originale rimasta (1 = non diluito,
+  // →0 = quasi solo acqua aggiunta): il contributo del vaso è una media pesata fra
+  // la sua chimica propria e quella dell'acqua, non solo la sua chimica rimpicciolita.
   function vesselN(v, pH){
     if(v.water) return n_w(pH);
     const pKas = Array.isArray(v.pKa) ? v.pKa : [v.pKa];
     let s = 0;
     for(const pk of pKas) s += pairN(Math.pow(10,-pk), v.C, pH);
-    return s;
+    const f = 1/(v.dil||1);
+    return f===1 ? s : f*s + (1-f)*n_w(pH);
   }
   function vesselBeta(v, pH){
     if(v.water) return beta_w(pH);
     const pKas = Array.isArray(v.pKa) ? v.pKa : [v.pKa];
     let s = 0;
     for(const pk of pKas) s += pairBeta(Math.pow(10,-pk), v.C, pH);
-    return s;
+    const f = 1/(v.dil||1);
+    return f===1 ? s : f*s + (1-f)*beta_w(pH);
   }
   function primaryPka(v){ return Array.isArray(v.pKa) ? v.pKa[0] : v.pKa; }
 
@@ -221,7 +229,7 @@
 
   function addVesselFromPreset(key){
     const p = PRESETS.find(p=>p.key===key) || PRESETS[0];
-    const v = { id:"v"+(nextId++), label:p.label, short:p.short, color:p.color, tauExtra:0, tauBase:0 };
+    const v = { id:"v"+(nextId++), label:p.label, short:p.short, color:p.color, tauExtra:0, tauBase:0, dil:1 };
     v.pKa = Array.isArray(p.pKa) ? p.pKa.slice() : p.pKa;
     v.C = p.C;
     v.species = p.species;
@@ -337,8 +345,8 @@
   // scala FISSA (non dipende dal numero o dalla composizione dei vasi correnti):
   // calibrata su un tampone 1 M esattamente al proprio pKa.
   const REF_MAX_BETA = Math.LN10 * 1.0 / 4;
-  const FIXED_HALF_PX = 52;
-  const MIN_HALF_PX = 4;
+  const FIXED_HALF_PX = 26;
+  const MIN_HALF_PX = 2;
   // il taglio (clamp) vero e proprio dei bordi del vaso avviene molto più in là di
   // FIXED_HALF_PX: si allarga fin quasi a toccare il vaso vicino (CLIP_GAP_PX di
   // margine), entro un tetto assoluto ragionevole. La CALIBRAZIONE del disegno (quanti
@@ -346,7 +354,7 @@
   // quindi l'aspetto dei vasi "normali" non cambia: solo le concentrazioni molto più
   // alte del riferimento continuano a crescere prima di venire davvero tagliate.
   const CLIP_GAP_PX = 6;
-  const ABS_MAX_HALF_PX = 150;
+  const ABS_MAX_HALF_PX = 75;
 
   const RIG = { x0:112, x1:940, yTop:120, yBottom:470, railY:492, stubTop:58, stubBot:572, viewW:980, viewH:610 };
   const RIG_MAX_COLS = 5; // al massimo 5 vasi/colonne affiancati senza scorrimento orizzontale
@@ -735,6 +743,11 @@
         <input type="range" draggable="false" min="0" max="100" step="1" value="${cToSlider(v.C)}" data-id="${v.id}" data-field="C">
         <output>${fmtConc(v.C)}</output>
       </div>
+      <div class="row-slider">
+        <span>Diluizione</span>
+        <input type="range" draggable="false" min="0" max="100" step="1" value="${dilToSlider(v.dil||1)}" data-id="${v.id}" data-field="dil">
+        <output>${fmtDil(v.dil||1)}</output>
+      </div>
     `;
     wireDragForCard(card, v);
     return card;
@@ -799,6 +812,25 @@
         }
         v.C = newC;
         e.target.nextElementSibling.textContent = fmtConc(v.C);
+        renderTitrantControls();
+        renderRigAndStats();
+      });
+    });
+    vesselList.querySelectorAll('input[data-field="dil"]').forEach(inp=>{
+      inp.addEventListener("input", e=>{
+        const v = vessels.find(v=>v.id===e.target.dataset.id);
+        if(!v) return;
+        // stessa logica della concentrazione: il titolante già aggiunto è disciolto
+        // nella stessa acqua che si sta versando, quindi si riscala con la stessa
+        // frazione f=1/dil usata ora anche dentro vesselN/vesselBeta — è proprio
+        // il combinarsi di queste due cose che fa tendere il pH a 7 quando dil→∞.
+        const oldDil = v.dil||1;
+        const newDil = sliderToDil(+e.target.value);
+        const ratio = oldDil/newDil; // f_new/f_old
+        v.tauExtra = (v.tauExtra||0) * ratio;
+        v.tauBase = (v.tauBase||0) * ratio;
+        v.dil = newDil;
+        e.target.nextElementSibling.textContent = fmtDil(v.dil);
         renderTitrantControls();
         renderRigAndStats();
       });
@@ -920,6 +952,19 @@
     const mM = C*1000;
     if(mM<1) return (mM*1000).toFixed(0)+" µM";
     return mM>=1000 ? (mM/1000).toFixed(2)+" M" : mM.toFixed(mM<10?2:0)+" mM";
+  }
+
+  // fattore di diluizione (v.dil, ≥1): scala log fino a un "quasi infinito" di 10⁷
+  // volte il volume originale — abbastanza da avvicinare per davvero il pH a 7, senza
+  // mai dichiarare una diluizione infinita vera e propria.
+  const DIL_MAX = 1e7;
+  function dilToSlider(d){ return (Math.log10(d)/Math.log10(DIL_MAX))*100; }
+  function sliderToDil(s){ return Math.pow(10, (s/100)*Math.log10(DIL_MAX)); }
+  function fmtDil(d){
+    if(d<=1.02) return "non diluito";
+    if(d>=1e6) return "× "+(d/1e6).toFixed(d>=1e7?0:1)+"M";
+    if(d>=1000) return "× "+Math.round(d/1000)+"k";
+    return "× "+Math.round(d);
   }
 
   /* ============================================================
