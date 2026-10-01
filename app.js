@@ -181,6 +181,25 @@
     const delta = mmolValue/1000 - groupDisplayTau(members);
     members[0].tauExtra = (members[0].tauExtra||0) + delta;
   }
+  // diluizione dell'INTERO gruppo (v.dil, ≥1 su ogni vaso non-acqua del gruppo): non
+  // è il titolante a cambiare slider, è la stessa quantità già aggiunta che — dissolta
+  // in sempre più acqua — pesa sempre meno, mentre la chimica di ciascun vaso (in
+  // vesselN/vesselBeta) si mescola sempre più con l'acqua pura. Combinate, le due cose
+  // fanno sì che il pH tenda a 7 quando dil→∞, qualunque titolante fosse stato lasciato.
+  function groupDil(members){
+    const v = members.find(v=>!v.water);
+    return v ? (v.dil||1) : 1;
+  }
+  function setGroupDil(members, newDil){
+    members.forEach(v=>{
+      if(v.water) return;
+      const oldDil = v.dil||1;
+      const ratio = oldDil/newDil; // f_new/f_old
+      v.tauExtra = (v.tauExtra||0) * ratio;
+      v.tauBase = (v.tauBase||0) * ratio;
+      v.dil = newDil;
+    });
+  }
   // estremo (mol/L, simmetrico) dello slider di UN gruppo: quanto titolante serve
   // davvero a portarlo ai bordi del proprio dominio (0/14, esteso se ha un pKa fuori
   // scala), con un margine — così quei bordi restano sempre raggiungibili.
@@ -743,11 +762,6 @@
         <input type="range" draggable="false" min="0" max="100" step="1" value="${cToSlider(v.C)}" data-id="${v.id}" data-field="C">
         <output>${fmtConc(v.C)}</output>
       </div>
-      <div class="row-slider">
-        <span>Diluizione</span>
-        <input type="range" draggable="false" min="0" max="100" step="1" value="${dilToSlider(v.dil||1)}" data-id="${v.id}" data-field="dil">
-        <output>${fmtDil(v.dil||1)}</output>
-      </div>
     `;
     wireDragForCard(card, v);
     return card;
@@ -812,25 +826,6 @@
         }
         v.C = newC;
         e.target.nextElementSibling.textContent = fmtConc(v.C);
-        renderTitrantControls();
-        renderRigAndStats();
-      });
-    });
-    vesselList.querySelectorAll('input[data-field="dil"]').forEach(inp=>{
-      inp.addEventListener("input", e=>{
-        const v = vessels.find(v=>v.id===e.target.dataset.id);
-        if(!v) return;
-        // stessa logica della concentrazione: il titolante già aggiunto è disciolto
-        // nella stessa acqua che si sta versando, quindi si riscala con la stessa
-        // frazione f=1/dil usata ora anche dentro vesselN/vesselBeta — è proprio
-        // il combinarsi di queste due cose che fa tendere il pH a 7 quando dil→∞.
-        const oldDil = v.dil||1;
-        const newDil = sliderToDil(+e.target.value);
-        const ratio = oldDil/newDil; // f_new/f_old
-        v.tauExtra = (v.tauExtra||0) * ratio;
-        v.tauBase = (v.tauBase||0) * ratio;
-        v.dil = newDil;
-        e.target.nextElementSibling.textContent = fmtDil(v.dil);
         renderTitrantControls();
         renderRigAndStats();
       });
@@ -1052,6 +1047,7 @@
       const boundMmol = groupBound(members)*1000;
       const dispMmol = groupDisplayTau(members)*1000;
       const label = members.map(v=>v.short||v.label).join(" + ");
+      const dilutable = members.some(v=>!v.water);
 
       const wrap = document.createElement("div");
       wrap.className = "titrant-group";
@@ -1068,6 +1064,12 @@
           <button type="button" class="tg-plus" title="Aggiungi un passo">+</button>
           <span class="mono" style="font-size:.66rem;color:var(--ink-faint);">mmol/L eq.</span>
         </div>
+        ${dilutable ? `
+        <div class="row-slider" style="margin-top:8px;">
+          <span>Diluizione</span>
+          <input type="range" class="tg-dil" draggable="false" min="0" max="100" step="1" value="${dilToSlider(groupDil(members))}">
+          <output>${fmtDil(groupDil(members))}</output>
+        </div>` : ""}
       `;
       const slider = wrap.querySelector(".tg-slider");
       const num = wrap.querySelector(".tg-num");
@@ -1092,6 +1094,20 @@
         setGroupDisplayTau(members, groupDisplayTau(members)*1000 + (+stepSelect.value));
         renderAll();
       });
+      const dilSlider = wrap.querySelector(".tg-dil");
+      if(dilSlider){
+        dilSlider.addEventListener("input", ()=>{
+          const newDil = sliderToDil(+dilSlider.value);
+          setGroupDil(members, newDil);
+          dilSlider.nextElementSibling.textContent = fmtDil(newDil);
+          const boundMmolNow = groupBound(members)*1000;
+          slider.min = -boundMmolNow; slider.max = boundMmolNow;
+          const dispNow = groupDisplayTau(members)*1000;
+          slider.value = Math.max(-boundMmolNow, Math.min(boundMmolNow, dispNow)).toFixed(3);
+          num.value = dispNow.toFixed(3);
+          renderRigAndStats();
+        });
+      }
       titrantGroupsEl.appendChild(wrap);
     });
   }
