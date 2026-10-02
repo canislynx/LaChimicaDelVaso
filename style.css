@@ -565,3 +565,10 @@
   .valve-btn:hover .valve-ring{ stroke:var(--accent); }
 
   [hidden]{ display:none !important; }
+
+  /* ---------- specie del vaso (grassetto = prevalenti) e forma di partenza ---------- */
+  .sp-line{ font-size:.78rem; line-height:1.45; margin:2px 0 6px; color:var(--ink-faint); }
+  .sp-line .sp{ transition:color .15s; }
+  .sp-line .sp.pred{ font-weight:700; color:var(--ink); }
+  .row-form{ display:grid; grid-template-columns:5.4em 1fr; align-items:center; gap:6px; font-size:.72rem; color:var(--ink-soft); margin-bottom:6px; }
+  .row-form select{ width:100%; min-width:0; font:inherit; font-size:.74rem; padding:4px 6px; border:1px solid var(--line-strong); border-radius:7px; background:var(--surface-2); color:var(--ink); }
