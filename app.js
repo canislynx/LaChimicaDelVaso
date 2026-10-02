@@ -9,12 +9,13 @@
      n_s(h)  = ∓C                                    acido/base forte (costante)
      beta    = d n / d pH   (larghezza del vaso, sempre ≥ 0)
      Un vaso poliprotico somma i contributi di più coppie (pKa può essere un array).
-     Ogni vaso porta con sé una quantità assoluta e conservata di titolante già aggiunto
-     (v.tauExtra, mol/L equivalenti dalla sua "nascita" a pH 7). Il livello di un gruppo
-     connesso risolve:
-       sum_i n_i(h)  =  sum_i [ n_i(7) + tauExtra_i ]
-     così unire due gruppi già titolati separatamente SOMMA le loro quantità — chimicamente
-     corretto — invece di ripartire da un nuovo zero per il gruppo appena unito.
+     Ogni vaso porta con sé una quantità assoluta e conservata (v.tauExtra, mol/L): la sua
+     composizione di partenza (k0 equivalenti di base forte per mole, vedi initComposition)
+     più il titolante aggiunto dopo. Il livello di un gruppo connesso risolve:
+       sum_i n_i(h) + n_w(h)  =  sum_i [ n_i(7) + tauExtra_i ]
+     dove n_w (acqua) c'è sempre una volta sola. Così il pH iniziale di una soluzione è
+     quello reale (1 M di acido acetico: 2,38) e unire due gruppi SOMMA le loro quantità
+     invece di ripartire da un nuovo zero.
      ============================================================ */
   const KW = 1e-14;
   const H = pH => Math.pow(10, -pH);
@@ -203,14 +204,58 @@
     // però, per come viene scritto, finisce quasi sempre fisicamente su members[0] —
     // che nei gruppi "di base" è proprio il vaso Acqua. Va riscalato lì comunque: è
     // la quantità di titolante dell'INTERO gruppo, non della sola chimica del vaso
-    // non-acqua, quindi qui NON si salta l'acqua come invece fa il resto (v.dil).
-    const oldDil = groupDil(members);
-    const ratio = oldDil/newDil; // f_new/f_old
+    // non-acqua. Ogni vaso si riscala dal PROPRIO fattore attuale (un vaso appena
+    // aggiunto a un gruppo già diluito parte da dil=1); l'acqua usa quello del gruppo.
+    const groupOld = groupDil(members);
     members.forEach(v=>{
+      const old = v.water ? groupOld : (v.dil||1);
+      const ratio = old/newDil; // f_new/f_old
       v.tauExtra = (v.tauExtra||0) * ratio;
       v.tauBase = (v.tauBase||0) * ratio;
       if(!v.water) v.dil = newDil;
     });
+  }
+
+  // --- soluzione di partenza (composizione) -------------------------------------------
+  // Un vaso reale nasce da una specie precisa (es. solo acido acetico, solo acetato, o un
+  // tampone 1:1), non "a pH 7". k0 = quanti equivalenti di base forte (Na⁺, OH⁻) porta per
+  // mole di sostanza: 0 = forma più protonata, m = più deprotonata (m = numero di coppie),
+  // i mezzi interi sono miscele 1:1. In termini di bilancio (vedi groupTarget) il suo
+  // contributo è T = f·C·k0, quindi v.tauExtra = T − vesselN(v,7). Il pH iniziale NON è
+  // scritto da nessuna parte: lo calcola il solutore, e dipende dalla concentrazione.
+  function nSites(v){ return Array.isArray(v.pKa) ? v.pKa.length : 1; }
+  function speciesNames(v){ return [v.species[0].acid, ...v.species.map(s=>s.base)]; }
+  function initComposition(v, k){
+    v.k0 = k;
+    v.tauExtra = ((v.C*k)/(v.dil||1)) - vesselN(v, 7);
+    v.tauBase = v.tauExtra; // il titolante mostrato riparte da 0
+  }
+  // cambia la forma di partenza senza toccare il titolante già aggiunto: sposta la
+  // composizione di Δ (e il riferimento del display di Δ, quindi lo slider non si muove)
+  function setVesselForm(v, k){
+    const kOld = v.k0!=null ? v.k0 : (vesselN(v,7)*(v.dil||1))/v.C;
+    const delta = (v.C/(v.dil||1)) * (k - kOld);
+    v.tauExtra = (v.tauExtra||0) + delta;
+    v.tauBase = (v.tauBase||0) + delta;
+    v.k0 = k;
+  }
+  function formOptions(v){
+    const names = speciesNames(v), m = nSites(v), opts = [];
+    for(let k=0; k<=m; k+=0.5){
+      opts.push(Number.isInteger(k)
+        ? {k, text:"solo "+names[k]}
+        : {k, text:names[k-0.5]+" + "+names[k+0.5]+" (1:1)"});
+    }
+    return opts;
+  }
+  // specie prevalenti al pH dato: quella in cui ci si trova, più la vicina entro ±0,95
+  // da un pKa (la zona tampone: nessuna delle due prevale davvero)
+  function predominantSet(v, pH){
+    const pKas = Array.isArray(v.pKa) ? v.pKa : [v.pKa];
+    const set = new Set();
+    set.add(pKas.filter(pk=>pH>pk).length);
+    pKas.forEach((pk,i)=>{ if(Math.abs(pH-pk) < 0.95){ set.add(i); set.add(i+1); } });
+    return set;
   }
   // estremo (mol/L, simmetrico) dello slider di UN gruppo: quanto titolante serve
   // davvero a portarlo ai bordi del proprio dominio (0/14, esteso se ha un pKa fuori
@@ -255,13 +300,18 @@
     renderAll();
   }
 
-  function addVesselFromPreset(key){
-    const p = PRESETS.find(p=>p.key===key) || PRESETS[0];
+  function newVesselFromPreset(p){
     const v = { id:"v"+(nextId++), label:p.label, short:p.short, color:p.color, tauExtra:0, tauBase:0, dil:1 };
     v.pKa = Array.isArray(p.pKa) ? p.pKa.slice() : p.pKa;
     v.C = p.C;
     v.species = p.species;
     if(p.acidColor && p.baseColor){ v.acidColor = p.acidColor; v.baseColor = p.baseColor; }
+    return v;
+  }
+  function addVesselFromPreset(key){
+    const p = PRESETS.find(p=>p.key===key) || PRESETS[0];
+    const v = newVesselFromPreset(p);
+    initComposition(v, p.k0!=null ? p.k0 : 0);
     vessels.push(v);
     valves.push(true);
     stacked.push(false);
@@ -766,6 +816,11 @@
         <button class="vdel" draggable="false" data-id="${v.id}" title="Rimuovi vaso">&times;</button>
       </div>
       <div class="pka-readout">pK<sub>a</sub> <span class="mono">${pKas.map(p=>p.toFixed(2)).join(" / ")}</span></div>
+      <div class="sp-line" data-id="${v.id}">${speciesNames(v).map((n,i)=>`<span class="sp" data-i="${i}">${n}</span>`).join('<span class="sp-sep"> / </span>')}</div>
+      <div class="row-form">
+        <span>Parto da</span>
+        <select draggable="false" data-id="${v.id}" data-field="form">${formOptions(v).map(o=>`<option value="${o.k}"${o.k===v.k0?" selected":""}>${o.text}</option>`).join("")}</select>
+      </div>
       <div class="row-slider">
         <span>Conc.</span>
         <input type="range" draggable="false" min="0" max="100" step="1" value="${cToSlider(v.C)}" data-id="${v.id}" data-field="C">
@@ -815,6 +870,14 @@
         const v = vessels.find(v=>v.id===e.target.dataset.id);
         v.label = e.target.value || v.label;
         renderRigAndStats();
+      });
+    });
+    vesselList.querySelectorAll('select[data-field="form"]').forEach(sel=>{
+      sel.addEventListener("change", e=>{
+        const v = vessels.find(v=>v.id===e.target.dataset.id);
+        if(!v) return;
+        setVesselForm(v, parseFloat(e.target.value));
+        renderAll();
       });
     });
     vesselList.querySelectorAll('input[data-field="C"]').forEach(inp=>{
@@ -958,17 +1021,18 @@
     return mM>=1000 ? (mM/1000).toFixed(2)+" M" : mM.toFixed(mM<10?2:0)+" mM";
   }
 
-  // fattore di diluizione (v.dil, ≥1): scala log fino a un "quasi infinito" di 10⁷
-  // volte il volume originale — abbastanza da avvicinare per davvero il pH a 7, senza
-  // mai dichiarare una diluizione infinita vera e propria.
-  const DIL_MAX = 1e7;
+  // fattore di diluizione (v.dil, ≥1): scala log fino a 10⁹ volte il volume originale:
+  // abbastanza da avvicinare per davvero il pH a 7 (1 M di acido acetico diluito 10⁹
+  // volte dà pH 6,998), senza dichiarare mai una diluizione infinita vera e propria.
+  const DIL_MAX = 1e9;
   function dilToSlider(d){ return (Math.log10(d)/Math.log10(DIL_MAX))*100; }
   function sliderToDil(s){ return Math.pow(10, (s/100)*Math.log10(DIL_MAX)); }
+  const SUP = "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079";
   function fmtDil(d){
     if(d<=1.02) return "non diluito";
-    if(d>=1e6) return "× "+(d/1e6).toFixed(d>=1e7?0:1)+"M";
-    if(d>=1000) return "× "+Math.round(d/1000)+"k";
-    return "× "+Math.round(d);
+    if(d>=1e5) return "\u00d7 10"+String(Math.round(Math.log10(d))).split("").map(c=>SUP[+c]).join("");
+    if(d>=1000) return "\u00d7 "+Math.round(d/1000)+"k";
+    return "\u00d7 "+Math.round(d);
   }
 
   /* ============================================================
@@ -1192,19 +1256,15 @@
     const p = PRESETS.find(p=>p.key===key);
     if(!p) return;
     const water = { id:"water", water:true, label:"Acqua pura", short:"Acqua", color:"var(--c-water)", tauExtra:0, tauBase:0 };
-    const buf = {id:"v"+(nextId++), label:p.label, short:p.short, pKa:p.pKa, C:p.C, color:p.color, species:p.species, tauExtra:0, tauBase:0};
+    const buf = newVesselFromPreset(p);
     vessels = [water, buf];
     valves = [true];
     stacked = [false];
-    const pk = p.pKa;
-    // "dall'acido"/"dalla base" partono dalla forma pressoché pura (±4 unità di pH dal
-    // pKa, oltre il 99.99% in quella forma): il titolante riparte da 0 proprio lì, così
-    // aggiungendolo si vede subito quanto ne serve per arrivare al tampone desiderato
-    let startLevel;
-    if(method==="mix") startLevel = pk;
-    else if(method==="fromAcid") startLevel = Math.max(0.05, pk-4);
-    else startLevel = Math.min(13.95, pk+4);
-    consolidateGroup([water, buf], startLevel);
+    // "dall'acido"/"dalla base" partono dalla soluzione pura di quella specie, al suo pH
+    // reale (dipende dalla concentrazione); "mix" dal tampone 1:1, esattamente al pKa.
+    // Il titolante mostrato riparte da 0 proprio lì (lo fa initComposition).
+    const m = nSites(buf);
+    initComposition(buf, method==="mix" ? m/2 : method==="fromAcid" ? 0 : m);
     renderAll();
   });
 
@@ -1395,8 +1455,18 @@
   /* ============================================================
      LOOP DI RENDER
      ============================================================ */
+  function updateSpeciesLines(levelByVesselId){
+    vesselList.querySelectorAll(".sp-line").forEach(line=>{
+      const v = vessels.find(v=>v.id===line.dataset.id);
+      const lvl = v ? levelByVesselId[v.id] : null;
+      if(lvl==null) return;
+      const pred = predominantSet(v, lvl);
+      line.querySelectorAll(".sp").forEach(sp=> sp.classList.toggle("pred", pred.has(+sp.dataset.i)));
+    });
+  }
   function renderRigAndStats(){
     const {levelByVesselId, groupInfo} = renderRig();
+    updateSpeciesLines(levelByVesselId);
     renderStats(groupInfo);
     renderChart(levelByVesselId);
     if(mode==="titolazione") renderTitrationChart();
