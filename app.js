@@ -32,33 +32,41 @@
   // proprio al bordo della finestra: non essendo spostato fuori scala come HCl, nel suo
   // caso la formula mostra fedelmente anche la parte debole dell'equilibrio (poco
   // dissociato a pH bassi), non un comportamento da base forte su tutto 0-14.
-  // diluire un vaso (v.dil, fattore ≥ 1: quante volte il suo volume originale è
-  // stato annacquato) non si limita a restringere la sua C: la soluzione diventa
-  // sempre più simile ad acqua pura, finché a diluizione "infinita" il suo pH deve
-  // tendere a 7. f è la frazione di soluzione originale rimasta (1 = non diluito,
-  // →0 = quasi solo acqua aggiunta): il contributo del vaso è una media pesata fra
-  // la sua chimica propria e quella dell'acqua, non solo la sua chimica rimpicciolita.
+  // La diluizione (v.dil ≥ 1, quante volte il volume originale è stato annacquato)
+  // riduce la concentrazione effettiva di tutto ciò che è disciolto di f = 1/dil. L'acqua
+  // come solvente NON si diluisce: il suo equilibrio (n_w) resta quello di sempre, ed è
+  // proprio questo che a diluizione estrema fa tendere il pH a 7.
   function vesselN(v, pH){
     if(v.water) return n_w(pH);
     const pKas = Array.isArray(v.pKa) ? v.pKa : [v.pKa];
     let s = 0;
     for(const pk of pKas) s += pairN(Math.pow(10,-pk), v.C, pH);
-    const f = 1/(v.dil||1);
-    return f===1 ? s : f*s + (1-f)*n_w(pH);
+    return s/(v.dil||1);
   }
   function vesselBeta(v, pH){
     if(v.water) return beta_w(pH);
     const pKas = Array.isArray(v.pKa) ? v.pKa : [v.pKa];
     let s = 0;
     for(const pk of pKas) s += pairBeta(Math.pow(10,-pk), v.C, pH);
-    const f = 1/(v.dil||1);
-    return f===1 ? s : f*s + (1-f)*beta_w(pH);
+    return s/(v.dil||1);
   }
   function primaryPka(v){ return Array.isArray(v.pKa) ? v.pKa[0] : v.pKa; }
 
+  // Ogni gruppo è una soluzione acquosa: l'equilibrio [OH⁻]−[H⁺] dell'acqua c'è SEMPRE,
+  // sia che il vaso Acqua sia fra i membri (lo porta lui), sia che non ci sia (lo si
+  // aggiunge una volta sola, implicito). Senza, un acido puro non avrebbe alcun modo di
+  // "autoionizzarsi" e il suo pH iniziale non sarebbe definito.
+  function groupHasWater(members){ return members.some(v=>v.water); }
   function groupF(members, pH){
     let s = 0;
     for(const v of members) s += vesselN(v, pH);
+    if(!groupHasWater(members)) s += n_w(pH);
+    return s;
+  }
+  function groupBeta(members, pH){
+    let s = 0;
+    for(const v of members) s += vesselBeta(v, pH);
+    if(!groupHasWater(members)) s += beta_w(pH);
     return s;
   }
 
@@ -144,7 +152,7 @@
     {key:"glicinaNH3", label:"Glicina: gruppo −NH₃⁺ (pKa 9.60)", short:"Glicina NH₃⁺", pKa:9.60, C:1.0, color:"var(--c-5)", cat:"buffer", group:"Amminoacidi", menu:false,
       species:[{acid:"H₃N⁺CH₂COO⁻", base:"H₂NCH₂COO⁻"}]},
     {key:"glicinaCompleta", label:"Glicina: sistema completo (2 coppie)", short:"Glicina", pKa:[2.34,9.60], C:1.0, color:"var(--c-5)", cat:"buffer", group:"Amminoacidi",
-      species:[{acid:"H₃N⁺CH₂COOH", base:"H₃N⁺CH₂COO⁻"},{acid:"H₃N⁺CH₂COO⁻", base:"H₂NCH₂COO⁻"}]},
+      k0:1, species:[{acid:"H₃N⁺CH₂COOH", base:"H₃N⁺CH₂COO⁻"},{acid:"H₃N⁺CH₂COO⁻", base:"H₂NCH₂COO⁻"}]},
 
     {key:"fenolftaleina", label:"Indicatore: fenolftaleina", short:"Fenolftaleina", pKa:9.10, C:0.00005, color:"var(--c-6)", cat:"indicator", group:"Indicatori",
       acidColor:[223,220,221], baseColor:[196,43,135],
@@ -162,7 +170,7 @@
     {key:"hcl",  label:"HCl (acido forte, pKa −7 stimato)", short:"HCl", pKa:-7, C:1.0, color:"var(--c-strong)", cat:"strong", group:"Acidi e basi forti",
       species:[{acid:"HCl", base:"Cl⁻"}]},
     {key:"naoh", label:"NaOH (base, pKa 14: equilibrio H₂O/OH⁻)", short:"NaOH", pKa:14, C:1.0, color:"var(--c-strong)", cat:"strong", group:"Acidi e basi forti",
-      species:[{acid:"H₂O", base:"OH⁻"}]}
+      k0:1, species:[{acid:"H₂O", base:"OH⁻"}]}
   ];
 
   let vessels = []; // sempre almeno un vaso (di norma l'acqua)
@@ -208,15 +216,12 @@
   // davvero a portarlo ai bordi del proprio dominio (0/14, esteso se ha un pKa fuori
   // scala), con un margine — così quei bordi restano sempre raggiungibili.
   function groupBound(members){
-    // un gruppo CON acqua resta sempre mirato a 0/14: a pH così estremi (21, 28...) il
-    // contributo di [H+]/[OH-] dell'acqua da solo esploderebbe la barra a valori assurdi
-    // (all'estremo NaOH, [OH-] varrebbe ~10¹⁴ mol/L) senza bisogno reale di arrivarci —
-    // solo un gruppo isolato SENZA acqua può davvero mirare al proprio pKa fuori scala.
-    const hasWater = members.some(v=>v.water);
-    const {lo,hi} = hasWater ? {lo:0,hi:14} : groupDomain(members);
+    // l'acqua è sempre presente nel gruppo (vedi groupF): a pH estremi (−14, 28...) il suo
+    // [H+]/[OH-] da solo esploderebbe la barra a valori assurdi, quindi i bordi sono
+    // sempre 0 e 14, anche per i vasi con pKa fuori scala come HCl.
     const baseSum = members.reduce((s,v)=>s+(v.tauBase||0),0);
-    const rawLo = tauForLevel(members, lo)*1.15 - baseSum;
-    const rawHi = tauForLevel(members, hi)*1.15 - baseSum;
+    const rawLo = tauForLevel(members, 0)*1.15 - baseSum;
+    const rawHi = tauForLevel(members, 14)*1.15 - baseSum;
     return Math.max(1, Math.abs(rawLo), Math.abs(rawHi)); // mol/L, minimo 1 di sicurezza
   }
   // consolida un (sotto)gruppo appena isolato su un unico vaso rappresentante: gli altri
@@ -307,7 +312,7 @@
     for(const g of groups){
       const grounded = isGrounded(g);
       const level = grounded ? solveLevel(g) : null;
-      const betaTotal = grounded ? g.reduce((s,v)=>s+vesselBeta(v, level), 0) : 0;
+      const betaTotal = grounded ? groupBeta(g, level) : 0;
       groupInfo.push({members:g, level, betaTotal, grounded});
       for(const v of g) levelByVesselId[v.id] = level;
     }
