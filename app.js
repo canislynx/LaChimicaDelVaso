@@ -285,13 +285,14 @@
   // prima — nessun salto, e da quel momento le due parti si titolano indipendentemente.
   function toggleValve(i){
     if(valves[i]){
+      const [ia, ib] = valveEnds(i);
       const groups = groupsFromValves();
-      const group = groups.find(g => g.includes(vessels[i]) && g.includes(vessels[i+1]));
+      const group = groups.find(g => g.includes(vessels[ia]) && g.includes(vessels[ib]));
       const level = solveLevel(group);
       valves[i] = false;
       const newGroups = groupsFromValves();
-      const subA = newGroups.find(g=>g.includes(vessels[i]));
-      const subB = newGroups.find(g=>g.includes(vessels[i+1]));
+      const subA = newGroups.find(g=>g.includes(vessels[ia]));
+      const subB = newGroups.find(g=>g.includes(vessels[ib]));
       consolidateGroup(subA, level);
       if(subB!==subA) consolidateGroup(subB, level);
     } else {
@@ -326,19 +327,35 @@
   let mode = "libero";
   resetDefault();
 
+  // I due vasi che una valvola collega davvero. Una valvola INTERNA a una pila
+  // (stacked[i]) collega i due vasi sovrapposti. Una valvola di ROTAIA collega due
+  // colonne vicine, ma il tubo sta in basso: attacca il vaso PIÙ IN BASSO di ciascuna
+  // colonna (l'ultimo, i vasi di una pila sono ordinati dall'alto al basso per pKa
+  // crescente), non quello in alto. Per questo i gruppi non sono più una catena di vasi
+  // consecutivi: chiudendo il rubinetto fra due vasi sovrapposti, quello in basso resta
+  // collegato ai vicini laterali e quello in alto resta solo.
+  function valveEnds(i){
+    if(stacked[i]) return [i, i+1];
+    const cols = computeColumns();
+    const c = cols.findIndex(col => col[col.length-1] === i);
+    const next = cols[c+1];
+    return [i, next[next.length-1]];
+  }
   function groupsFromValves(){
-    const groups = [];
-    let cur = [vessels[0]];
+    const parent = vessels.map((_,i)=>i);
+    const find = x => parent[x]===x ? x : (parent[x] = find(parent[x]));
     for(let i=0;i<valves.length;i++){
-      if(valves[i]){
-        cur.push(vessels[i+1]);
-      } else {
-        groups.push(cur);
-        cur = [vessels[i+1]];
-      }
+      if(!valves[i]) continue;
+      const [a, b] = valveEnds(i);
+      parent[find(a)] = find(b);
     }
-    groups.push(cur);
-    return groups;
+    const byRoot = new Map(); // ordine d'inserzione = per primo vaso del gruppo
+    vessels.forEach((v,i)=>{
+      const r = find(i);
+      if(!byRoot.has(r)) byRoot.set(r, []);
+      byRoot.get(r).push(v);
+    });
+    return Array.from(byRoot.values());
   }
 
   // colonne: vasi consecutivi impilati (stacked[i]===true) condividono la stessa

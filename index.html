@@ -116,7 +116,7 @@
       <li><b>Aggiungere un vaso</b>: si sceglie un preset — raggruppati per famiglia: tamponi semplici, fosfato, carbonato, amminoacidi, indicatori, acidi/basi forti — nel riquadro "Vasi sul banco" e si preme "+ Aggiungi".</li>
       <li><b>Gestire una scheda</b>: si rinomina, si cancella con &times;, e la concentrazione si regola con lo slider "Conc." (0.1&ndash;10 M). Cambiare la concentrazione cambia anche il pH della soluzione, come in laboratorio.</li>
       <li><b>Soluzione di partenza</b>: ogni vaso nasce come una soluzione reale, non a pH 7. Nel menu "Parto da" della scheda si sceglie la specie da cui si parte (solo l'acido, solo la base, o metà e metà) e il pH iniziale si calcola da quello e dalla concentrazione: una soluzione 1 M di acido acetico parte a pH 2,38, una di acetato di sodio a 9,38, il tampone metà e metà a 4,76 (il pK<sub>a</sub>). In grassetto, sotto il nome del vaso, c'è la specie che prevale al pH attuale, o entrambe quando ci si trova nella zona tampone (entro una unità dal pK<sub>a</sub>).</li>
-      <li><b>Valvole e colonne</b>: le valvole sul tubo in basso aprono/chiudono il collegamento fra vasi adiacenti (stesso pH se collegati). Trascinando la maniglia ⠿ di una scheda su un'altra, il vaso si sposta lì accanto e il confine diventa anche "impilato" (stessa colonna, come nei sistemi poliprotici) — cliccabile per separarle di nuovo restando comunque collegate da una valvola.</li>
+      <li><b>Valvole e colonne</b>: le valvole sul tubo in basso aprono/chiudono il collegamento fra vasi adiacenti (stesso pH se collegati). Trascinando la maniglia ⠿ di una scheda su un'altra, il vaso si sposta lì accanto e il confine diventa anche "impilato" (stessa colonna, come nei sistemi poliprotici) — cliccabile per separarle di nuovo restando comunque collegate da una valvola. Il tubo laterale sta in basso: in una pila è sempre il vaso più in basso a collegarsi ai vicini, quindi chiudendo il rubinetto fra due vasi sovrapposti quello in alto resta isolato.</li>
     </ul>
     <div class="instr-fig" id="figBench">
       <p class="instr-fig-cap">Due vasi collegati: la valvola aperta sul tubo, i nomi sotto ciascuna colonna.</p>
@@ -140,7 +140,6 @@
     </div>
 
     <ul class="instr-list">
-      <li><b>HCl e NaOH</b>: sono vasi normalissimi, impilabili e collegabili come qualunque altro. HCl usa la stima approssimata, ma comunque la più citata, di sette unità di pH sotto lo zero: un pK<sub>a</sub> fuori dalla finestra fra pH 0 e pH 14, per cui quando è sul banco la scala guadagna spazio sotto per mostrarne il rigonfiamento, e nell'intervallo visibile resta sempre dissociato, come ci si aspetta da un acido forte. NaOH invece ha pK<sub>a</sub> 14: non è una stima o una scelta illustrativa, è il vero equilibrio fra acqua e il suo OH⁻, la base coniugata dell'acqua stessa. Proprio perché 14 è già dentro la finestra invece di starne fuori come il sette di HCl, il vaso mostra fedelmente anche la parte debole di quell'equilibrio: a pH lontani da 14 l'NaOH aggiunto risulta poco dissociato, un comportamento diverso da quello di una base forte da manuale, che qui si è scelto di non correggere artificialmente.</li>
       <li><b>Altri comandi</b>: "↺ Reset" rimuove tutto tranne l'acqua pura; "Tema" alterna chiaro/scuro/sistema.</li>
     </ul>
   </div>
