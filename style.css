@@ -221,7 +221,7 @@
   }
   /* il menu sta sopra il margine vuoto del grafico, fuori dal flusso: così non sposta
      la curva e le righe orizzontali restano allineate a quelle dei vasi */
-  #titrPanel > .field-row{ position:absolute; top:14px; left:calc(16px + (100% - 32px) * 0.14); z-index:1; }
+  #titrPanel > .field-row{ position:absolute; top:14px; left:calc(16px + (100% - 32px) * 0.19); z-index:1; }
   .bench-row.titr-layout > #sideControls{
     flex-direction:row;
     flex-wrap:wrap;

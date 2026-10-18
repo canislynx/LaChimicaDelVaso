@@ -452,6 +452,16 @@
   const ABS_MAX_HALF_PX = 75;
 
   const RIG = { x0:112, x1:940, yTop:120, yBottom:470, railY:492, stubTop:58, stubBot:572, viewW:980, viewH:610 };
+  // In Titolazione affiancata (vasi + curva) ciascun pannello è quasi un quadrato: si
+  // sacrifica larghezza (viewBox 620 invece di 980, con 80 unità di margine a destra per
+  // l'etichetta del pH) e a parità di pixel tutto viene ingrandito di circa 1,6 volte.
+  // Sotto i 900px (pannelli impilati) e nelle figure delle istruzioni resta la vista larga.
+  let forceWideGeometry = false;
+  function applyRigGeometry(){
+    const square = !forceWideGeometry && mode==="titolazione" && window.matchMedia("(min-width: 901px)").matches;
+    RIG.x1 = square ? 540 : 940;
+    RIG.viewW = square ? 620 : 980;
+  }
   const RIG_MAX_COLS = 5; // al massimo 5 vasi/colonne affiancati senza scorrimento orizzontale
   // HCl/NaOH sono vasi reali con pKa fuori da 0-14 (-7 e 21): quando sono sul banco si
   // guadagna spazio sopra/sotto per mostrarne il vero rigonfiamento, con la scala che
@@ -497,6 +507,7 @@
   };
 
   function renderRig(){
+    applyRigGeometry();
     rigSvg.innerHTML = "";
     const defs = el("defs", {}, rigSvg);
 
@@ -1338,6 +1349,8 @@
     // scala condivisa dell'asse: il massimo fra quanto serve a ciascun gruppo per
     // raggiungere il proprio estremo, così ogni curva ci sta comodamente
     const B = titrAxisMax(groups);
+    applyRigGeometry();
+    TT.x1 = RIG.x1; TT.viewW = RIG.viewW;
     const Xt = a => TT.x0 + (a/B)*(TT.x1-TT.x0);
     const Yt = pH => TT.y0 + (pH/14)*(TT.y1-TT.y0);
     // stesso viewBox verticale del banco (che può allungarsi per HCl): le due scale e i due
@@ -1437,6 +1450,7 @@
   // (non screenshot rasterizzati): si costruisce uno stato dimostrativo, si cattura il
   // markup, poi si ripristina lo stato di partenza dell'app.
   function buildInstrFigures(){
+    forceWideGeometry = true;
     const savedVessels = vessels, savedValves = valves, savedStacked = stacked, savedMode = mode;
 
     const water = { id:"water", water:true, label:"Acqua pura", short:"Acqua", color:"var(--c-water)", tauExtra:0, tauBase:0 };
@@ -1482,6 +1496,7 @@
       .replace(' id="titrHit"', "");
     document.getElementById("figTitr").insertAdjacentHTML("afterbegin", titrSvgMarkup);
 
+    forceWideGeometry = false;
     vessels = savedVessels; valves = savedValves; stacked = savedStacked; mode = savedMode;
     setMode(mode);
     renderAll();
@@ -1536,7 +1551,7 @@
   let resizeT = null;
   window.addEventListener("resize", ()=>{
     clearTimeout(resizeT);
-    resizeT = setTimeout(renderRig, 120);
+    resizeT = setTimeout(()=>{ renderRig(); if(mode==="titolazione") renderTitrationChart(); }, 120);
   });
 
   setMode("libero");
