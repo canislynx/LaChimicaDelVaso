@@ -1303,7 +1303,10 @@
      TITOLAZIONE: curva pH vs titolante, trascinabile
      ============================================================ */
   const titrSvg = document.getElementById("titrSvg");
-  const TT = {x0:112, x1:940, y0:560, y1:80, viewW:980};
+  // Stessa altezza del banco: pH 0 in alto e pH 14 in basso esattamente alle quote dei vasi
+  // (RIG.yTop / RIG.yBottom), con lo stesso viewBox verticale (vedi renderTitrationChart),
+  // così lo stesso pH sta alla stessa altezza nel vaso e nella curva.
+  const TT = {x0:112, x1:940, y0:RIG.yTop, y1:RIG.yBottom, viewW:980};
   // valore ipotetico di un gruppo se il suo titolante mostrato fosse dispMmol: usato per
   // tracciare la curva (che esplora l'intero asse) senza toccare lo stato reale del gruppo
   function levelAtDisplay(members, dispMmol){
@@ -1336,7 +1339,11 @@
     // raggiungere il proprio estremo, così ogni curva ci sta comodamente
     const B = titrAxisMax(groups);
     const Xt = a => TT.x0 + (a/B)*(TT.x1-TT.x0);
-    const Yt = pH => TT.y0 - (pH/14)*(TT.y0-TT.y1);
+    const Yt = pH => TT.y0 + (pH/14)*(TT.y1-TT.y0);
+    // stesso viewBox verticale del banco (che può allungarsi per HCl): le due scale e i due
+    // margini superiori coincidono, quindi le righe orizzontali sono allineate
+    const rigVB = (rigSvg.getAttribute("viewBox")||"0 0 980 610").split(/\s+/).map(Number);
+    titrSvg.setAttribute("viewBox", `0 ${rigVB[1]} ${TT.viewW} ${rigVB[3]}`);
 
     const g = el("g",{},titrSvg);
     for(let pH=0; pH<=14; pH+=2){
@@ -1345,10 +1352,10 @@
       el("text",{x:TT.x0-10,y:y+4.5,"text-anchor":"end","font-family":"IBM Plex Mono, monospace","font-size":13,fill:"var(--ink-faint)"}, g).textContent = pH;
     }
     [0, B/4, B/2, 3*B/4, B].forEach(a=>{
-      el("text",{x:Xt(a), y:TT.y0+24,"text-anchor":"middle","font-family":"IBM Plex Mono, monospace","font-size":13,fill:"var(--ink-faint)"}, g).textContent = fmtAmt(a);
+      el("text",{x:Xt(a), y:TT.y1+26,"text-anchor":"middle","font-family":"IBM Plex Mono, monospace","font-size":13,fill:"var(--ink-faint)"}, g).textContent = fmtAmt(a);
     });
-    el("text",{x:(TT.x0+TT.x1)/2, y:TT.y0+46,"text-anchor":"middle","font-family":"IBM Plex Sans, sans-serif","font-size":13,fill:"var(--ink-faint)"}, g).textContent = titrDir>0 ? "base forte aggiunta (mmol/L)" : "acido forte aggiunto (mmol/L)";
-    el("text",{x:TT.x0-52, y:(TT.y0+TT.y1)/2,"text-anchor":"middle","font-family":"IBM Plex Sans, sans-serif","font-size":13,fill:"var(--ink-faint)","transform":`rotate(-90 ${TT.x0-52} ${(TT.y0+TT.y1)/2})`}, g).textContent = "pH";
+    el("text",{x:(TT.x0+TT.x1)/2, y:TT.y1+50,"text-anchor":"middle","font-family":"IBM Plex Sans, sans-serif","font-size":13,fill:"var(--ink-faint)"}, g).textContent = titrDir>0 ? "base forte aggiunta (mmol/L)" : "acido forte aggiunto (mmol/L)";
+    el("text",{x:TT.x0-18, y:TT.y0-38,"text-anchor":"end","font-family":"IBM Plex Sans, sans-serif","font-size":14,"font-weight":600,fill:"var(--ink-soft)"}, g).textContent = "pH ↓";
 
     const legend = document.getElementById("titrLegend");
     legend.innerHTML = "";
@@ -1376,7 +1383,7 @@
       legend.appendChild(item);
     });
 
-    el("rect", {id:"titrHit", x:TT.x0, y:TT.y1, width:TT.x1-TT.x0, height:TT.y0-TT.y1, fill:"transparent"}, titrSvg);
+    el("rect", {id:"titrHit", x:TT.x0, y:TT.y0, width:TT.x1-TT.x0, height:TT.y1-TT.y0, fill:"transparent"}, titrSvg);
   }
 
   // listener persistenti sull'elemento <svg> stesso (non ricreato a ogni render, a differenza del
@@ -1387,7 +1394,8 @@
   function titrPickGroupAt(clientX, clientY){
     const rect = titrSvg.getBoundingClientRect();
     const svgX = (clientX - rect.left) * (TT.viewW / rect.width);
-    const svgY = (clientY - rect.top) * (TT.viewW / rect.width); // stessa scala, viewBox quadrata in unità
+    const vbY = titrSvg.viewBox.baseVal ? titrSvg.viewBox.baseVal.y : 0;
+    const svgY = vbY + (clientY - rect.top) * (TT.viewW / rect.width); // stessa scala in unità
     let best = null, bestDist = Infinity;
     titrSvg.querySelectorAll(".titr-dot").forEach(dot=>{
       const dx = +dot.getAttribute("cx") - svgX, dy = +dot.getAttribute("cy") - svgY;

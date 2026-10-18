@@ -216,8 +216,12 @@
   .bench-row.titr-layout > #titrPanel{
     margin-top:0;
     padding:14px 16px 6px 16px;
-    border-left:1px solid var(--line);
+    box-shadow:inset 1px 0 0 var(--line); /* non border: la larghezza deve restare identica a quella dei vasi */
+    position:relative;
   }
+  /* il menu sta sopra il margine vuoto del grafico, fuori dal flusso: così non sposta
+     la curva e le righe orizzontali restano allineate a quelle dei vasi */
+  #titrPanel > .field-row{ position:absolute; top:14px; left:calc(16px + (100% - 32px) * 0.14); z-index:1; }
   .bench-row.titr-layout > #sideControls{
     flex-direction:row;
     flex-wrap:wrap;
@@ -236,7 +240,8 @@
   @media (max-width:900px){
     .bench-row, .bench-row.titr-layout{ grid-template-columns:1fr; grid-template-areas:"rig" "titr" "side"; }
     #sideControls, .bench-row.titr-layout > #sideControls{ flex-direction:column; border-left:none; border-top:1px solid var(--line); max-height:none !important; overflow-y:visible !important; }
-    .bench-row.titr-layout > #titrPanel{ border-left:none; border-top:1px solid var(--line); padding:12px 16px 6px; }
+    .bench-row.titr-layout > #titrPanel{ box-shadow:none; border-top:1px solid var(--line); padding:12px 16px 6px; }
+    #titrPanel > .field-row{ position:static; margin-bottom:6px; }
   }
   .rig{ padding:14px 16px 6px; overflow-x:visible; }
   .rig svg{ width:100%; height:auto; display:block; }
