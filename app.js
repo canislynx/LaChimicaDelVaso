@@ -1237,6 +1237,8 @@
 
   document.getElementById("resetBtn").addEventListener("click", ()=>{
     resetDefault();
+    titrDir = 1;
+    document.getElementById("titrDirection").value = "1";
     setMode("libero");
     renderAll();
   });
@@ -1252,6 +1254,18 @@
 
   const prepSystem = document.getElementById("prepSystem");
   fillGroupedSelect(prepSystem, PRESETS.filter(p=>p.cat==="buffer" && !Array.isArray(p.pKa)));
+
+  // tipo di titolazione: cambiando verso, i vasi ripartono dalla forma giusta (acida se si
+  // aggiunge base forte, basica se si aggiunge acido forte) e il titolante da 0
+  const titrDirectionSel = document.getElementById("titrDirection");
+  titrDirectionSel.addEventListener("change", ()=>{
+    titrDir = +titrDirectionSel.value;
+    vessels.forEach(v=>{
+      if(v.water){ v.tauExtra = 0; v.tauBase = 0; }
+      else initComposition(v, titrDir>0 ? 0 : nSites(v));
+    });
+    renderAll();
+  });
 
   function setMode(m){
     mode = m;
@@ -1300,14 +1314,28 @@
     return lvl;
   }
   let titrGroupsCache = []; // aggiornata a ogni render, usata per capire quale curva si sta trascinando
+  // verso della titolazione: +1 = si aggiunge base forte (a un acido), −1 = acido forte (a
+  // una base). L'asse parte da 0 e va solo in quel verso: la lunga coda "dall'altra parte"
+  // era solo un tratto piatto che distraeva dalla curva vera.
+  let titrDir = 1;
+  // quanto titolante (mmol/L, sempre positivo) serve a un gruppo per arrivare al bordo del
+  // proprio pH (14 se si aggiunge base, 0 se si aggiunge acido), con un piccolo margine
+  function groupAxisNeed(members){
+    const baseSum = members.reduce((s,v)=>s+(v.tauBase||0),0);
+    const lvl = titrDir>0 ? 14 : 0;
+    const need = titrDir * (tauForLevel(members, lvl) - baseSum);
+    return Math.max(1e-6, need*1.05) * 1000;
+  }
+  function titrAxisMax(groups){ return Math.max(...groups.map(groupAxisNeed)); }
+  const fmtAmt = t => { const a = Math.abs(t); return a===0 ? "0" : a>=20 ? String(Math.round(t)) : a>=2 ? t.toFixed(1) : t.toFixed(2); };
   function renderTitrationChart(){
     titrSvg.innerHTML = "";
     const groups = groupsFromValves();
     titrGroupsCache = groups;
     // scala condivisa dell'asse: il massimo fra quanto serve a ciascun gruppo per
-    // raggiungere i propri estremi, così ogni curva ci sta comodamente
-    const B = Math.max(1, ...groups.map(g=>groupBound(g)*1000));
-    const Xt = t => TT.x0 + ((t+B)/(2*B))*(TT.x1-TT.x0);
+    // raggiungere il proprio estremo, così ogni curva ci sta comodamente
+    const B = titrAxisMax(groups);
+    const Xt = a => TT.x0 + (a/B)*(TT.x1-TT.x0);
     const Yt = pH => TT.y0 - (pH/14)*(TT.y0-TT.y1);
 
     const g = el("g",{},titrSvg);
@@ -1316,12 +1344,10 @@
       el("line",{x1:TT.x0,x2:TT.x1,y1:y,y2:y,stroke:"var(--line)","stroke-width":1}, g);
       el("text",{x:TT.x0-10,y:y+4.5,"text-anchor":"end","font-family":"IBM Plex Mono, monospace","font-size":13,fill:"var(--ink-faint)"}, g).textContent = pH;
     }
-    // quattro tacche eque più lo zero: si adattano all'estremo corrente della scala
-    [-B, -B/2, 0, B/2, B].forEach(t=>{
-      const x = Xt(t);
-      el("text",{x, y:TT.y0+24,"text-anchor":"middle","font-family":"IBM Plex Mono, monospace","font-size":13,fill:"var(--ink-faint)"}, g).textContent = Math.round(t);
+    [0, B/4, B/2, 3*B/4, B].forEach(a=>{
+      el("text",{x:Xt(a), y:TT.y0+24,"text-anchor":"middle","font-family":"IBM Plex Mono, monospace","font-size":13,fill:"var(--ink-faint)"}, g).textContent = fmtAmt(a);
     });
-    el("text",{x:(TT.x0+TT.x1)/2, y:TT.y0+46,"text-anchor":"middle","font-family":"IBM Plex Sans, sans-serif","font-size":13,fill:"var(--ink-faint)"}, g).textContent = "titolante τ di ciascun gruppo (mmol/L, H⁺ ← 0 → OH⁻)";
+    el("text",{x:(TT.x0+TT.x1)/2, y:TT.y0+46,"text-anchor":"middle","font-family":"IBM Plex Sans, sans-serif","font-size":13,fill:"var(--ink-faint)"}, g).textContent = titrDir>0 ? "base forte aggiunta (mmol/L)" : "acido forte aggiunto (mmol/L)";
     el("text",{x:TT.x0-52, y:(TT.y0+TT.y1)/2,"text-anchor":"middle","font-family":"IBM Plex Sans, sans-serif","font-size":13,fill:"var(--ink-faint)","transform":`rotate(-90 ${TT.x0-52} ${(TT.y0+TT.y1)/2})`}, g).textContent = "pH";
 
     const legend = document.getElementById("titrLegend");
@@ -1332,15 +1358,17 @@
       const color = colorOf(rep);
       const pts = [];
       for(let i=0;i<=140;i++){
-        const t = -B + 2*B*i/140;
-        const lvl = levelAtDisplay(members, t);
-        pts.push(`${Xt(t)},${Yt(lvl)}`);
+        const a = B*i/140;
+        const lvl = levelAtDisplay(members, titrDir*a);
+        pts.push(`${Xt(a)},${Yt(lvl)}`);
       }
       el("polyline", {points:pts.join(" "), fill:"none", stroke:color, "stroke-width":3, "stroke-linejoin":"round"}, titrSvg);
 
-      const curDisp = groupDisplayTau(members)*1000;
-      const curLevel = solveLevel(members);
-      el("circle", {cx:Xt(curDisp), cy:Yt(curLevel), r:6.5, fill:color, stroke:"var(--surface)", "stroke-width":2, class:"titr-dot", "data-gi":gi}, titrSvg);
+      // il punto resta sulla curva anche se il cursore del gruppo è stato portato
+      // dall'altra parte dello zero (fuori asse): lo si ferma al bordo
+      const aNow = Math.max(0, Math.min(B, titrDir*groupDisplayTau(members)*1000));
+      const lvlNow = levelAtDisplay(members, titrDir*aNow);
+      el("circle", {cx:Xt(aNow), cy:Yt(lvlNow), r:6.5, fill:color, stroke:"var(--surface)", "stroke-width":2, class:"titr-dot", "data-gi":gi}, titrSvg);
 
       const item = document.createElement("span");
       item.className = "item";
@@ -1372,10 +1400,10 @@
     if(!titrDragMembers) return;
     const rect = titrSvg.getBoundingClientRect();
     const svgX = (clientX - rect.left) * (TT.viewW / rect.width);
-    const B = Math.max(1, ...titrGroupsCache.map(g=>groupBound(g)*1000));
-    let t = ((svgX - TT.x0)/(TT.x1-TT.x0))*(2*B) - B;
-    t = Math.max(-B, Math.min(B, t));
-    setGroupDisplayTau(titrDragMembers, t);
+    const B = titrAxisMax(titrGroupsCache);
+    let t = ((svgX - TT.x0)/(TT.x1-TT.x0))*B;
+    t = Math.max(0, Math.min(B, t));
+    setGroupDisplayTau(titrDragMembers, titrDir*t);
     renderRigAndStats();
     renderTitrantControls();
   }
@@ -1437,7 +1465,8 @@
     document.getElementById("figSpecie").insertAdjacentHTML("afterbegin", specieSvg);
 
     mode = "titolazione";
-    setGroupDisplayTau([water, demo1, demo2], -groupBound([water, demo1, demo2])*1000*0.22);
+    titrDir = 1;
+    setGroupDisplayTau([water, demo1, demo2], groupAxisNeed([water, demo1, demo2])*0.45);
     renderRig();
     renderTitrationChart();
     const titrSvgMarkup = document.getElementById("titrSvg").outerHTML
