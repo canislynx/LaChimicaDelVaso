@@ -86,12 +86,18 @@
   // dominio di bisezione di un gruppo: normalmente 0-14, esteso a EXTRA_LO/EXTRA_HI se
   // il gruppo contiene solo vasi con pKa fuori scala (HCl, NaOH isolati o fra loro) —
   // così, isolati con una valvola chiusa, possono davvero riempirsi fino al loro pKa reale
+  // un pKa conta come "fuori scala" (e fa guadagnare spazio sul banco) solo se sta ad
+  // almeno 1 unità di pH oltre 0 o 14: HCl (−7), HBr, HClO₄, H₂SO₄ (−3), non un −0,21 come
+  // l'EDTA o un 14,15 come il glicerolo, il cui rigonfiamento si vede già quasi tutto
+  const OUT_OF_SCALE_MARGIN = 1;
+  const isLowPka  = pk => pk < -OUT_OF_SCALE_MARGIN;
+  const isHighPka = pk => pk > 14 + OUT_OF_SCALE_MARGIN;
   function groupDomain(members){
     let lo = 0, hi = 14;
     members.forEach(v=>{
       if(v.water) return;
       const pKas = Array.isArray(v.pKa) ? v.pKa : [v.pKa];
-      pKas.forEach(pk=>{ if(pk<0) lo = EXTRA_LO; if(pk>14) hi = EXTRA_HI; });
+      pKas.forEach(pk=>{ if(isLowPka(pk)) lo = EXTRA_LO; if(isHighPka(pk)) hi = EXTRA_HI; });
     });
     return {lo, hi};
   }
@@ -173,6 +179,54 @@
     {key:"naoh", label:"NaOH (base, pKa 14: equilibrio H₂O/OH⁻)", short:"NaOH", pKa:14, C:1.0, color:"var(--c-strong)", cat:"strong", group:"Acidi e basi forti",
       k0:1, species:[{acid:"H₂O", base:"OH⁻"}]}
   ];
+
+  /* ============================================================
+     DATABASE CurTiPot (pka-database.js, generato da tools/build_pka_database.py)
+     Ogni sostanza diventa un preset come gli altri. Le specie sono nominate in modo
+     generico dalla carica della forma completamente deprotonata (z) e dal numero di pKa
+     (m): HₕA con carica z+h (acidi: A), HₕB con carica z+h (basi: B), HₕIn (indicatori).
+     ============================================================ */
+  const SUP_DIG = "\u2070\u00b9\u00b2\u00b3\u2074\u2075\u2076\u2077\u2078\u2079";
+  const toSup = n => String(n).replace(/\d/g, d=>SUP_DIG[+d]);
+  const toSub = n => String(n).replace(/\d/g, d=>String.fromCharCode(0x2080+ +d));
+  const chargeStr = q => q===0 ? "" : (Math.abs(q)>1 ? toSup(Math.abs(q)) : "") + (q>0 ? "\u207a" : "\u207b");
+  function dbSpeciesNames(z, m, letter){
+    const names = [];
+    for(let h=m; h>=0; h--) names.push((h>0 ? "H"+(h>1 ? toSub(h) : "") : "") + letter + chargeStr(z+h));
+    return names;
+  }
+  function prettyFormula(f){
+    return f.replace(/([A-Za-z)\]])(\d+)/g, (_,a,d)=>a+toSub(d)).replace(/[+-]$/, c=>chargeStr(c==="+"?1:-1));
+  }
+  function presetFromDb(e, i){
+    const m = e.pk.length;
+    const names = dbSpeciesNames(e.z, m, e.z<0 ? "A" : "B");
+    const species = [];
+    for(let j=0;j<m;j++) species.push({acid:names[j], base:names[j+1]});
+    // si parte dalla specie neutra (quella di carica 0), come per ammoniaca/glicina; lo ione
+    // idrossido dal suo lato basico
+    const isOH = /^hydroxide ion$/i.test(e.n);
+    if(isOH) species[0] = {acid:"H\u2082O", base:"OH\u207b"};
+    const k0 = isOH ? m : Math.max(0, Math.min(m, m + e.z));
+    return {
+      key:"db"+i, label:e.n, short:e.n.length>15 ? e.n.slice(0,14)+"\u2026" : e.n,
+      pKa: m===1 ? e.pk[0] : e.pk.slice(), C:1.0, color:"var(--c-"+(i%7+1)+")",
+      cat:"db", group:"CurTiPot: acidi e basi", k0, species,
+      src:"curtipot", formula:e.f ? prettyFormula(e.f) : "", alt:(e.a||[]).join(" "), cond:{t:e.t, i:e.i}
+    };
+  }
+  function presetFromDbIndicator(e, i){
+    const base = e.n.replace(/\s*\(pKa[^)]*\)/, "");
+    return {
+      key:"dbi"+i, label:"Indicatore: "+e.n, short:base.length>15 ? base.slice(0,14)+"\u2026" : base,
+      pKa:e.pk, C:0.00005, color:"var(--c-"+(i%7+1)+")", cat:"dbIndicator", group:"CurTiPot: indicatori", k0:0,
+      species:[{acid:"HIn"+chargeStr(e.z+1), base:"In"+chargeStr(e.z)}],
+      acidColor:e.ac, baseColor:e.bc, src:"curtipot", formula:"", alt:"", cond:{}
+    };
+  }
+  const CURTIPOT = window.CURTIPOT_DB || {meta:null, substances:[], indicators:[]};
+  CURTIPOT.substances.forEach((e,i)=> PRESETS.push(presetFromDb(e,i)));
+  CURTIPOT.indicators.forEach((e,i)=> PRESETS.push(presetFromDbIndicator(e,i)));
 
   let vessels = []; // sempre almeno un vaso (di norma l'acqua)
   let valves = [];  // length vessels.length-1 ; true = aperta (collegata)
@@ -307,6 +361,7 @@
     v.C = p.C;
     v.species = p.species;
     if(p.acidColor && p.baseColor){ v.acidColor = p.acidColor; v.baseColor = p.baseColor; }
+    if(p.src){ v.src = p.src; v.formula = p.formula; v.cond = p.cond; }
     return v;
   }
   function addVesselFromPreset(key){
@@ -534,8 +589,8 @@
     // e/o SOTTO per mostrarne il vero rigonfiamento: per tutti gli altri casi il canvas
     // resta esattamente quello di sempre.
     const allPkas = vessels.flatMap(v=> v.water ? [] : (Array.isArray(v.pKa)?v.pKa:[v.pKa]));
-    const hasLowPka = allPkas.some(pk=>pk<0);
-    const hasHighPka = allPkas.some(pk=>pk>14);
+    const hasLowPka = allPkas.some(isLowPka);
+    const hasHighPka = allPkas.some(isHighPka);
     const topExtra = hasLowPka ? EXTRA_VESSEL_H : 0;
     const botExtra = hasHighPka ? EXTRA_VESSEL_H : 0;
     const viewBoxY = -topExtra;
@@ -639,8 +694,8 @@
       // dominio di questa colonna: normalmente 0-14, esteso se uno dei vasi impilati ha
       // un pKa fuori scala (HCl/NaOH) — un'unica forma continua, non un pezzo a parte
       const colPkas = members.flatMap(v=> v.water?[]:(Array.isArray(v.pKa)?v.pKa:[v.pKa]));
-      const domainLo = colPkas.some(pk=>pk<0) ? EXTRA_LO : 0;
-      const domainHi = colPkas.some(pk=>pk>14) ? EXTRA_HI : 14;
+      const domainLo = colPkas.some(isLowPka) ? EXTRA_LO : 0;
+      const domainHi = colPkas.some(isHighPka) ? EXTRA_HI : 14;
       const steps = Math.round(64 * (domainHi-domainLo)/14);
       const pts = sampleH(widthFn, steps, domainLo, domainHi);
       const left = [], right = [];
@@ -818,6 +873,13 @@
   const vesselList = document.getElementById("vesselList");
   const GRAB = `<span class="vgrab" title="Trascinate SOLO da qui per riordinare o impilare">⠿</span>`;
 
+  // riga di fonte per le sostanze del database: formula e condizioni a cui vale il pKa
+  function dbNote(v){
+    const c = v.cond || {};
+    const cond = (c.t!=null ? c.t+" \u00b0C" : "T non indicata") + (c.i!=null ? ", I = "+c.i : "");
+    return (v.formula ? v.formula+" \u00b7 " : "") + "pK<sub>a</sub> a " + cond + " \u00b7 CurTiPot";
+  }
+
   function buildVesselCard(v){
     const card = document.createElement("div");
     card.className = "vcard";
@@ -844,6 +906,7 @@
         <button class="vdel" draggable="false" data-id="${v.id}" title="Rimuovi vaso">&times;</button>
       </div>
       <div class="pka-readout">pK<sub>a</sub> <span class="mono">${pKas.map(p=>p.toFixed(2)).join(" / ")}</span></div>
+      ${v.src ? `<div class="db-note">${dbNote(v)}</div>` : ""}
       <div class="sp-line" data-id="${v.id}">${speciesNames(v).map((n,i)=>`<span class="sp" data-i="${i}">${n}</span>`).join('<span class="sp-sep"> / </span>')}</div>
       <div class="row-form">
         <span>Parto da</span>
@@ -1239,9 +1302,53 @@
     });
   }
 
+  // ricerca: confronto senza maiuscole/accenti e con pedici/apici ridotti a cifre normali,
+  // così "ch3cooh" trova CH₃COOH e "nh4+" trova NH₄⁺. Cerca in nome, sinonimi, formula,
+  // famiglia, nomi delle specie e valori dei pKa.
+  function normText(s){
+    return String(s).normalize("NFD").replace(/[\u0300-\u036f]/g,"").toLowerCase()
+      .replace(/[\u2080-\u2089]/g, c=>String(c.charCodeAt(0)-0x2080))
+      .replace(/[\u2070\u00b9\u00b2\u00b3\u2074-\u2079]/g, c=>String(SUP_DIG.indexOf(c)))
+      .replace(/\u207a/g,"+").replace(/[\u207b\u2212]/g,"-");
+  }
+  function presetHay(p){
+    if(!p._hay){
+      const pk = (Array.isArray(p.pKa) ? p.pKa : [p.pKa]).join(" ");
+      p._hay = normText([p.label, p.short, p.alt||"", p.formula||"", p.group, pk,
+        (p.species||[]).map(sp=>sp.acid+" "+sp.base).join(" ")].join(" "));
+    }
+    return p._hay;
+  }
+  // elenco filtrabile: ricostruisce le <option> a ogni tasto (display:none sulle option non
+  // funziona in Safari). Invio = azione principale, freccia giù = va all'elenco.
+  function setupPicker(select, input, getList, rows, onEnter){
+    const countEl = document.createElement("div");
+    countEl.className = "pick-count";
+    input.insertAdjacentElement("afterend", countEl);
+    select.size = rows;
+    function refresh(){
+      const list = getList();
+      const terms = normText(input.value).split(/\s+/).filter(Boolean);
+      const matches = terms.length ? list.filter(p=>terms.every(t=>presetHay(p).includes(t))) : list;
+      const prev = select.value;
+      fillGroupedSelect(select, matches);
+      if(matches.length) select.value = matches.some(p=>p.key===prev) ? prev : matches[0].key;
+      countEl.textContent = matches.length ? (terms.length ? matches.length+" di "+list.length+" sostanze" : list.length+" sostanze") : "Nessuna sostanza trovata";
+    }
+    input.addEventListener("input", refresh);
+    input.addEventListener("keydown", e=>{
+      if(e.key==="Enter"){ e.preventDefault(); if(onEnter) onEnter(); }
+      else if(e.key==="ArrowDown"){ e.preventDefault(); select.focus(); }
+    });
+    refresh();
+  }
+
   const presetSelect = document.getElementById("presetSelect");
-  fillGroupedSelect(presetSelect, PRESETS.filter(p=>p.menu!==false));
-  document.getElementById("addBtn").addEventListener("click", ()=>{
+  const addBtn = document.getElementById("addBtn");
+  setupPicker(presetSelect, document.getElementById("presetSearch"), ()=>PRESETS.filter(p=>p.menu!==false), 6, ()=>addBtn.click());
+  presetSelect.addEventListener("dblclick", ()=>addBtn.click());
+  addBtn.addEventListener("click", ()=>{
+    if(!presetSelect.value) return;
     addVesselFromPreset(presetSelect.value); // aggiunto in coda, collegato al vaso precedente
     renderAll();
   });
@@ -1264,7 +1371,11 @@
   const prepSideCard = document.getElementById("prepSideCard");
 
   const prepSystem = document.getElementById("prepSystem");
-  fillGroupedSelect(prepSystem, PRESETS.filter(p=>p.cat==="buffer" && !Array.isArray(p.pKa)));
+  // per preparare un tampone servono sistemi con UN solo pKa e un tampone vero: per quelli del
+  // database si escludono gli indicatori e i pKa fuori dalla zona utile (acidi/basi forti)
+  const isPrepCandidate = p => !Array.isArray(p.pKa) &&
+    (p.cat==="buffer" || (p.cat==="db" && p.pKa>=0.5 && p.pKa<=13.5));
+  setupPicker(prepSystem, document.getElementById("prepSearch"), ()=>PRESETS.filter(isPrepCandidate), 5, null);
 
   // tipo di titolazione: cambiando verso, i vasi ripartono dalla forma giusta (acida se si
   // aggiunge base forte, basica se si aggiunge acido forte) e il titolante da 0

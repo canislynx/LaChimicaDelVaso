@@ -72,7 +72,8 @@
             <p class="hint" style="margin:0 0 2px;">Trascinate dalla maniglia ⠿ per impilare o affiancare.</p>
             <div class="vessel-list" id="vesselList"></div>
             <div class="add-vessel">
-              <select id="presetSelect"></select>
+              <input type="search" id="presetSearch" placeholder="Cerca: nome, formula o pKa…" aria-label="Cerca una sostanza" autocomplete="off" spellcheck="false">
+              <select id="presetSelect" aria-label="Sostanze disponibili"></select>
               <button id="addBtn" type="button">+ Aggiungi</button>
             </div>
           </div>
@@ -82,6 +83,7 @@
             <p class="hint" style="margin:0 0 2px;">Scegliete il sistema e il metodo, poi osservate a che pH arriva la soluzione.</p>
             <div class="field">
               <label for="prepSystem">Sistema tampone</label>
+              <input type="search" id="prepSearch" placeholder="Cerca: nome, formula o pKa…" aria-label="Cerca un sistema tampone" autocomplete="off" spellcheck="false">
               <select id="prepSystem"></select>
             </div>
             <div class="field">
@@ -109,7 +111,9 @@
     </div>
   </section>
 
-  <footer>La Chimica del Vaso &middot; modello di capacità tampone di Van Slyke, esteso al contributo dell'autoionizzazione dell'acqua e al potenziale chimico del protone &middot; costruito per l'uso in classe.</footer>
+  <footer>
+    <p class="credits"><b>Dati dei pK<sub>a</sub> e delle sostanze</b>: database di <b>CurTiPot</b> (versione 4.4.0, gennaio 2024), il foglio di calcolo gratuito di Ivano G. R. Gutz, Instituto de Qu&iacute;mica, Universidade de S&atilde;o Paulo (Brasile) &mdash; <a href="https://www.iq.usp.br/gutz" target="_blank" rel="noopener">iq.usp.br/gutz</a>. Raccoglie circa 250 sistemi da fonti indicate nel file originale, per lo pi&ugrave; a 25&nbsp;&deg;C e forza ionica 0, senza garanzia di correttezza.</p>
+    La Chimica del Vaso &middot; modello di capacità tampone di Van Slyke, esteso al contributo dell'autoionizzazione dell'acqua e al potenziale chimico del protone &middot; costruito per l'uso in classe.</footer>
 </div>
 
 <dialog id="instrDialog">
@@ -124,6 +128,7 @@
       <li><b>Quattro modalità</b> in alto: <b>Modello libero</b> per costruire qualsiasi combinazione di vasi; <b>Preparazione tampone</b> per simulare come si prepara in laboratorio un tampone; <b>Titolazione</b> per la curva completa di pH; <b>Specie predominanti</b> per vedere le formule delle specie in gioco accanto a ogni vaso. Il banco al centro è sempre lo stesso: cambia solo cosa gli sta intorno.</li>
       <li><b>Aggiungere un vaso</b>: si sceglie un preset — raggruppati per famiglia: tamponi semplici, fosfato, carbonato, amminoacidi, indicatori, acidi/basi forti — nel riquadro "Vasi sul banco" e si preme "+ Aggiungi".</li>
       <li><b>Gestire una scheda</b>: si rinomina, si cancella con &times;, e la concentrazione si regola con lo slider "Conc." (0.1&ndash;10 M). Cambiare la concentrazione cambia anche il pH della soluzione, come in laboratorio.</li>
+      <li><b>Cercare una sostanza</b>: sopra l'elenco dei preset c'è un campo di ricerca (nome in inglese, formula come CH3COOH o NH4+, oppure un valore di pK<sub>a</sub>); l'elenco si restringe mentre si scrive, Invio o doppio clic aggiungono il vaso. Oltre ai sistemi preparati a mano, ci sono circa 250 sostanze e 9 indicatori dal database di <b>CurTiPot</b> (Ivano G. R. Gutz, Universidade de São Paulo, versione 4.4.0): i loro pK<sub>a</sub> sono per lo più a 25&nbsp;&deg;C e forza ionica 0, e sulla scheda si legge a che condizioni vale ciascun valore. Le specie sono nominate in modo generico (HA/A<sup>&minus;</sup>, BH<sup>+</sup>/B) a partire dalla carica indicata dal database.</li>
       <li><b>Soluzione di partenza</b>: ogni vaso nasce come una soluzione reale, non a pH 7. Nel menu "Parto da" della scheda si sceglie la specie da cui si parte (solo l'acido, solo la base, o metà e metà) e il pH iniziale si calcola da quello e dalla concentrazione: una soluzione 1 M di acido acetico parte a pH 2,38, una di acetato di sodio a 9,38, il tampone metà e metà a 4,76 (il pK<sub>a</sub>). In grassetto, sotto il nome del vaso, c'è la specie che prevale al pH attuale, o entrambe quando ci si trova nella zona tampone (entro una unità dal pK<sub>a</sub>).</li>
       <li><b>Valvole e colonne</b>: le valvole sul tubo in basso aprono/chiudono il collegamento fra vasi adiacenti (stesso pH se collegati). Trascinando la maniglia ⠿ di una scheda su un'altra, il vaso si sposta lì accanto e il confine diventa anche "impilato" (stessa colonna, come nei sistemi poliprotici) — cliccabile per separarle di nuovo restando comunque collegate da una valvola. Il tubo laterale sta in basso: in una pila è sempre il vaso più in basso a collegarsi ai vicini, quindi chiudendo il rubinetto fra due vasi sovrapposti quello in alto resta isolato.</li>
     </ul>
@@ -154,6 +159,7 @@
   </div>
 </dialog>
 
+<script src="pka-database.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

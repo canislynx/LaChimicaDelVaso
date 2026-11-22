@@ -577,3 +577,19 @@
   .sp-line .sp.pred{ font-weight:700; color:var(--ink); }
   .row-form{ display:grid; grid-template-columns:5.4em 1fr; align-items:center; gap:6px; font-size:.72rem; color:var(--ink-soft); margin-bottom:6px; }
   .row-form select{ width:100%; min-width:0; font:inherit; font-size:.74rem; padding:4px 6px; border:1px solid var(--line-strong); border-radius:7px; background:var(--surface-2); color:var(--ink); }
+
+  /* ---------- ricerca nell'elenco delle sostanze ---------- */
+  .add-vessel input[type="search"], .field input[type="search"]{
+    flex:1 1 100%; width:100%; min-width:0; box-sizing:border-box;
+    font:inherit; font-size:.82rem;
+    border:1px solid var(--line-strong); background:var(--surface-2); color:var(--ink);
+    border-radius:8px; padding:7px 10px;
+  }
+  .add-vessel input[type="search"]:focus, .field input[type="search"]:focus{ outline:2px solid var(--accent); outline-offset:-1px; }
+  .pick-count{ flex:1 1 100%; font-size:.68rem; color:var(--ink-faint); margin:-2px 0 0; }
+  .add-vessel select[size], .field select[size]{ flex:1 1 100%; width:100%; padding:4px; }
+  .add-vessel select[size] option, .field select[size] option{ padding:3px 6px; }
+  .add-vessel select[size] optgroup, .field select[size] optgroup{ font-style:normal; }
+  .db-note{ font-size:.68rem; color:var(--ink-faint); margin:-3px 0 6px; line-height:1.35; }
+  footer .credits{ margin:0 0 10px; line-height:1.5; }
+  footer .credits b{ color:var(--ink-soft); font-weight:600; }
